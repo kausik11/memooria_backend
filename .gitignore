@@ -1,0 +1,19 @@
+# Dependencies and generated output
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Local configuration (keep the setup template)
+# .env
+# .env.*
+# !.env.example
+
+# Local MongoDB files, including live WiredTiger locks
+.data/
+
+# Test output
+test-results/
+playwright-report/
