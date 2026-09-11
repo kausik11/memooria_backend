@@ -2,7 +2,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { connectDatabase } from "./config/database.js";
-import { Creator, Service, User, Review, SiteContent } from "./models/index.js";
+import { Creator, Service, User, Review, SiteContent, Inquiry } from "./models/index.js";
 import { refreshRating } from "./controllers/creators.js";
 const photo = (id, w = 1200) =>
   `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=85`;
@@ -255,16 +255,17 @@ export async function seed() {
       "They understood our vision and brought it to life with so much care. We couldn’t have asked for a more beautiful day.",
     ],
   ];
-  const creators = await Creator.find({ featured: true }).sort({
-    createdAt: 1,
-  });
-  for (let i = 0; i < customers.length; i++) {
-    const [name, comment] = customers[i];
-    let user = await User.findOne({ email: `sample${i}@example.com` });
+  const creators = await Creator.find({
+    slug: { $in: entries.map(([name]) => name.toLowerCase().replaceAll(/[^a-z0-9 ]/g, "").replaceAll(" ", "-")) },
+  }).sort({ slug: 1 });
+  for (let i = 0; i < creators.length; i++) {
+    const customerIndex = i % customers.length;
+    const [name, comment] = customers[customerIndex];
+    let user = await User.findOne({ email: `sample${customerIndex}@example.com` });
     if (!user)
       user = await User.create({
         name,
-        email: `sample${i}@example.com`,
+        email: `sample${customerIndex}@example.com`,
         password: await bcrypt.hash(crypto.randomUUID(), 12),
       });
     await Review.updateOne(
@@ -274,15 +275,58 @@ export async function seed() {
           user: user._id,
           creator: creators[i]._id,
           customer: name,
-          rating: 5,
+          rating: i % 2 === 0 ? 5 : 4,
           comment,
-          approved: true,
+          approved: i % 3 !== 2,
         },
       },
       { upsert: true },
     );
     await refreshRating(creators[i]._id);
+    await Inquiry.updateOne(
+      { email: user.email, creator: creators[i]._id, message: `[Sample] Please share a quote for ${creators[i].category.toLowerCase()} at our celebration.` },
+      { $setOnInsert: {
+        user: user._id,
+        creator: creators[i]._id,
+        name,
+        email: user.email,
+        phone: "+91 90000 00000",
+        service: creators[i].category,
+        date: creators[i].availability.find((date) => date >= availability[0]),
+        message: `[Sample] Please share a quote for ${creators[i].category.toLowerCase()} at our celebration.`,
+        status: ["New", "Contacted", "Completed"][i % 3],
+      } },
+      { upsert: true },
+    );
   }
+  await Inquiry.updateOne(
+    { email: "general-inquiry@example.com", message: "[Sample] Please help us choose a team for a family celebration." },
+    { $setOnInsert: {
+      name: "Sample Customer",
+      email: "general-inquiry@example.com",
+      phone: "+91 90000 00000",
+      service: "Event planning consultation",
+      message: "[Sample] Please help us choose a team for a family celebration.",
+      status: "New",
+    } },
+    { upsert: true },
+  );
+  for (const status of ["Pending", "Inactive"]) {
+    const slug = `sample-${status.toLowerCase()}-studio`;
+    await Creator.updateOne({ slug }, { $setOnInsert: {
+      slug, businessName: `Sample ${status} Studio`, ownerName: "Sample Owner",
+      category: "Photography", location: "Kolkata, India", city: "Kolkata", state: "West Bengal",
+      email: `${slug}@example.com`, description: `Fictional studio for testing the ${status.toLowerCase()} status.`,
+      status, coverImage: photos.camera, profileImage: photos.camera,
+      packages: [{ name: "Basic", price: 10000, description: "Sample photography package" }],
+      availability,
+    } }, { upsert: true });
+  }
+  await Service.updateOne({ slug: "sample-event-consultation" }, { $setOnInsert: {
+    slug: "sample-event-consultation", title: "Event planning consultation",
+    description: "Sample consultation service for planning your celebration.",
+    image: photos.party, kind: "service",
+  } }, { upsert: true });
   if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
     if (process.env.SEED_ADMIN_PASSWORD.length < 10)
       throw new Error("Admin password must contain at least 10 characters.");
