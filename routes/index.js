@@ -27,7 +27,18 @@ import {
   getCreator,
   refreshRating,
 } from "../controllers/creators.js";
+import { onboardingRouter } from "./onboarding.js";
+import { configurationRouter } from "./configuration.js";
+import { bookingRouter } from "./bookings.js";
+import { requirementRouter } from "./requirements.js";
+import { workspaceRouter } from "./workspace.js";
+import { creatorWorkspaceRouter } from "./creator-workspace.js";
+import { draftsRouter } from "./drafts.js";
+import { accountsRouter } from "./accounts.js";
+import { Booking } from "../models/marketplace.js";
 export const router = Router();
+router.use(draftsRouter, accountsRouter, configurationRouter, bookingRouter, requirementRouter, workspaceRouter, creatorWorkspaceRouter);
+router.use(onboardingRouter);
 const authLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 30,
@@ -52,7 +63,7 @@ router.post(
   ),
   register,
 );
-router.post("/auth/login", authLimit, validate(credentials), login);
+router.post("/auth/login", authLimit, validate(credentials.extend({ password: z.string().min(1).max(72) })), login);
 router.post("/auth/logout", (req, res) => {
   res.clearCookie("memooria_session", {
     ...cookieOptions(),
@@ -65,7 +76,7 @@ router.get("/creators", listCreators);
 router.get("/search", listCreators);
 router.get("/creators/:slug", getCreator);
 router.get("/services", async (req, res) =>
-  res.json(await Service.find().sort({ createdAt: 1 }).lean()),
+  res.json(await Service.find({ active: { $ne: false } }).sort({ sortOrder: 1, createdAt: 1 }).lean()),
 );
 router.get("/content", async (req, res) => {
   const [content, creators, users, events, cities, reviews] = await Promise.all(
@@ -125,14 +136,22 @@ router.post(
     z.object({
       creator: z.string().refine(mongoose.isValidObjectId),
       rating: z.number().int().min(1).max(5),
+      quality: z.number().int().min(1).max(5).optional(),
+      communication: z.number().int().min(1).max(5).optional(),
+      professionalism: z.number().int().min(1).max(5).optional(),
+      value: z.number().int().min(1).max(5).optional(),
+      deliveryTime: z.number().int().min(1).max(5).optional(),
       comment: z.string().trim().min(10).max(2000),
     }),
   ),
   async (req, res) => {
     if (!(await Creator.exists({ _id: req.body.creator, status: "Active" })))
       return res.status(404).json({ message: "Creator not found." });
+    const booking = await Booking.findOne({ customer: req.user._id, creator: req.body.creator, status: "COMPLETED" });
+    if (!booking) return res.status(403).json({ message: "Complete a booking with this creator before leaving a review." });
     res.status(201).json(
       await Review.create({
+        booking: booking._id,
         ...req.body,
         user: req.user._id,
         customer: req.user.name,
@@ -153,10 +172,10 @@ router.get("/admin/dashboard", async (req, res) => {
       .limit(5)
       .lean(),
   ]);
-  res.json({ creators, users, inquiries, completed, bookings: 0, recent });
+  res.json({ creators, users, inquiries, completed, bookings: await Booking.countDocuments(), recent });
 });
 router.get("/admin/creators", async (req, res) =>
-  res.json(await Creator.find().sort({ createdAt: -1 }).lean()),
+  res.json(await Creator.find().select("+application").sort({ createdAt: -1 }).lean()),
 );
 router.post("/admin/creator", validate(creatorInput), async (req, res) =>
   res.status(201).json(await Creator.create(req.body)),

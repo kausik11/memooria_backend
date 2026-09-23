@@ -11,6 +11,7 @@ export async function authenticate(req, res, next) {
     req.user = await User.findById(decoded.sub);
     if (!req.user)
       return res.status(401).json({ message: "Your session has expired." });
+    if (req.user.status !== "ACTIVE" || (req.user.demo && process.env.DEMO_MODE !== "true")) return res.status(403).json({ message: "This account is not available." });
     next();
   } catch {
     res
@@ -19,7 +20,7 @@ export async function authenticate(req, res, next) {
   }
 }
 export function adminOnly(req, res, next) {
-  if (req.user.role !== "admin")
+  if (!["admin", "super_admin"].includes(req.user.role))
     return res.status(403).json({ message: "Administrator access required." });
   next();
 }

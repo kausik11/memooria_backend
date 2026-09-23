@@ -10,7 +10,8 @@
     "dev": "node --watch server.js",
     "start": "node server.js",
     "seed": "node seed.js",
-    "test": "node --test --test-concurrency=1 tests/*.test.js"
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "seed:demo": "node seed-marketplace.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

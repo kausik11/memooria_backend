@@ -7,6 +7,7 @@ coverage/
 *.log
 
 # Local configuration (keep the setup template)
+.env.local
 # .env
 # .env.*
 # !.env.example

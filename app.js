@@ -40,6 +40,8 @@ export function createApp() {
     res.status(404).json({ message: "Endpoint not found." }),
   );
   app.use((err, req, res, next) => {
+    if (err.status) return res.status(err.status).json({ message: err.message });
+    if (err.name === "VersionError") return res.status(409).json({ message: "This record changed. Refresh and try again." });
     if (err.code === 11000)
       return res.status(409).json({
         message: "An entry with these unique details already exists.",

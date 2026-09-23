@@ -30,5 +30,6 @@ export async function login(req, res) {
   );
   if (!user || !(await bcrypt.compare(req.body.password, user.password)))
     return res.status(401).json({ message: "Email or password is incorrect." });
+  if (user.status !== "ACTIVE" || (user.demo && process.env.DEMO_MODE !== "true")) return res.status(403).json({ message: "This account is not available." });
   res.json(session(res, user));
 }
