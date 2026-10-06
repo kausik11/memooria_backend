@@ -39,7 +39,8 @@ bookingRouter.get("/bookings/:id", async (req, res) => {
   if (isAdmin(req.user) || await contactUnlocked(b)) {
     const [customer, creator] = await Promise.all([User.findById(b.customer).select("name email phone"), Creator.findById(b.creator).select("businessName email phone")]); contacts = { customer, creator };
   }
-  res.json({ ...await bookingView(b, req.user), project, contacts });
+  const requirementTitle = b.requirement ? (await Requirement.findById(b.requirement).select("title").lean())?.title : null;
+  res.json({ ...await bookingView(b, req.user), project, contacts, requirementTitle });
 });
 bookingRouter.patch("/bookings/:id/details", validate(z.object({ instructions: z.string().trim().min(10).max(5000), venue: z.string().max(1000).optional() })), async (req, res) => {
   const b = await bookingFor(req.user, req.params.id);

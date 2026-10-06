@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Creator, Service } from "../models/index.js";
+import { Creator, Service, User } from "../models/index.js";
 import { Requirement, Proposal, Booking } from "../models/marketplace.js";
 import { authenticate, adminOnly } from "../middleware/auth.js";
 import { validate, futureDate } from "../middleware/validate.js";
@@ -44,7 +44,8 @@ requirementRouter.get("/requirements/:id", async (req, res) => {
   const owner = isAdmin(req.user) || String(r.customer) === req.user.id;
   const c = owner ? null : await ownCreator(req.user);
   const proposals = await Proposal.find({ requirement: r._id, ...(!owner && { creator: c._id }) }).populate("creator", "businessName slug verified rating reviewCount profileImage").sort({ createdAt: -1 }).lean();
-  res.json({ ...view(r, req.user), proposals: proposals.map(p => ({ ...p, message: moderate(p.message), terms: moderate(p.terms), inclusions: moderate(p.inclusions), history: undefined, answers: owner ? p.answers : undefined })) });
+  const customerContact = isAdmin(req.user) ? await User.findById(r.customer).select("name email phone").lean() : null;
+  res.json({ ...view(r, req.user), customerContact, proposals: proposals.map(p => ({ ...p, message: moderate(p.message), terms: moderate(p.terms), inclusions: moderate(p.inclusions), history: undefined, answers: owner ? p.answers : undefined })) });
 });
 requirementRouter.put("/requirements/:id", validate(input), async (req, res) => {
   const r = await Requirement.findById(req.params.id); if (!r || (!isAdmin(req.user) && String(r.customer) !== req.user.id)) fail(404, "Requirement not found.");
